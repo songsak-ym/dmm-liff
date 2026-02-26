@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ลงทะเบียน Update งาน (DMM)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spinner 1.5s linear infinite;
+            animation: spinner 1.5s linear infinite;
+        }
+        @keyframes spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800 pb-10">
+
+    <div class="bg-blue-600 text-white p-6 rounded-b-3xl shadow-md text-center">
+        <h1 class="text-2xl font-semibold mb-2">📋 Digital Monday Meeting</h1>
+        <p class="text-sm opacity-90">ลงทะเบียนอัปเดตงาน 15 นาที/คน</p>
+    </div>
+
+    <div class="max-w-md mx-auto px-4 mt-6">
+        
+        <!-- Profile Section -->
+        <div id="profileSection" class="bg-white p-4 rounded-xl shadow-sm mb-6 flex items-center space-x-4">
+            <img id="profileImage" src="https://via.placeholder.com/150?text=Wait" alt="Profile" class="w-12 h-12 rounded-full border-2 border-blue-100 object-cover">
+            <div>
+                <p class="text-xs text-gray-500">ลงทะเบียนในชื่อ</p>
+                <p id="displayName" class="font-medium text-sm text-gray-800">⏳ เริ่มโหลดระบบ...</p>
+            </div>
+        </div>
+
+        <!-- Form Section -->
+        <div class="bg-white p-5 rounded-xl shadow-sm">
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-gray-700 mb-2">📅 วันที่อัปเดตงาน</label>
+                <input type="date" id="dateInput" class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+
+            <div class="mb-5">
+                <label class="block text-sm font-medium text-gray-700 mb-2">⏰ เลือกเวลา (15 นาที)</label>
+                <div class="grid grid-cols-2 gap-3" id="timeSlots"></div>
+            </div>
+
+            <button id="submitBtn" onclick="submitData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg shadow-md transition duration-200 flex justify-center items-center opacity-50 cursor-not-allowed" disabled>
+                <span>บันทึกข้อมูล</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex justify-center items-center">
+        <div class="bg-white p-5 rounded-xl flex flex-col items-center">
+            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
+            <p class="text-gray-700 font-medium">กำลังบันทึกข้อมูล...</p>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        const LIFF_ID = "2009237506-d0wffnAv"; 
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx7C9d1sVaAnkQt-bX8obtm44nsHYYl1Oot0XVbNlhJLmgRG0BMonfEq733QNtGU8a8Vg/exec"; 
+        // ==========================================
+
+        const TIME_SLOTS = ['8.30', '8.45', '9.00', '9.15', '9.30', '9.45', '10.00', '10.15', '10.30'];
+        let selectedTime = null;
+        let userName = "";
+
+        async function initializeLiff() {
+            const display = document.getElementById('displayName');
+            try {
+                display.innerText = "⏳ กำลังเรียก LIFF.init()...";
+                await liff.init({ liffId: LIFF_ID });
+                
+                display.innerText = "⏳ เช็คสถานะล็อกอิน...";
+                if (liff.isLoggedIn()) {
+                    display.innerText = "⏳ กำลังดึงข้อมูลโปรไฟล์...";
+                    const profile = await liff.getProfile();
+                    userName = profile.displayName;
+                    
+                    display.innerText = userName;
+                    display.classList.replace('text-gray-800', 'text-blue-600');
+                    display.classList.replace('text-sm', 'text-lg');
+                    document.getElementById('profileImage').src = profile.pictureUrl || 'https://via.placeholder.com/150';
+                } else {
+                    display.innerText = "⏳ กำลังพาล็อกอิน...";
+                    liff.login(); 
+                }
+            } catch (err) {
+                console.error('Init Error:', err);
+                display.innerText = "❌ พังที่ LIFF: " + err.message;
+                display.classList.add("text-red-500", "font-bold");
+                
+                alert("เกิดข้อผิดพลาดในการดึงข้อมูลจาก LINE!\n\nสาเหตุที่เป็นไปได้:\n1. ถูกบล็อกโดย Google Apps Script iframe\n2. ลืมเปิดสิทธิ์ profile ใน LINE Developers\n\nรายละเอียด Error:\n" + err.message);
+            }
+        }
+
+        function setupDate() {
+            const today = new Date();
+            const dateInput = document.getElementById('dateInput');
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            dateInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+
+        function renderTimeSlots() {
+            const container = document.getElementById('timeSlots');
+            TIME_SLOTS.forEach(time => {
+                const btn = document.createElement('button');
+                btn.className = 'time-btn py-2 px-4 border border-gray-200 rounded-lg text-center hover:bg-blue-50 focus:outline-none transition text-gray-700';
+                btn.innerText = time;
+                btn.onclick = () => selectTime(time, btn);
+                container.appendChild(btn);
+            });
+        }
+
+        function selectTime(time, clickedBtn) {
+            selectedTime = time;
+            document.querySelectorAll('.time-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
+                btn.classList.add('border-gray-200', 'text-gray-700');
+            });
+            clickedBtn.classList.remove('border-gray-200', 'text-gray-700');
+            clickedBtn.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+            
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+
+        function submitData() {
+            if (!selectedTime) return;
+            
+            if (!userName || userName === "" || userName === "ไม่ระบุชื่อ") {
+                alert("⚠️ ระบบยังดึงชื่อ LINE ของคุณไม่สำเร็จ!\nกรุณารอจนกว่าจะเห็นชื่อตัวเอง หรือดูข้อความ Error สีแดงบนหน้าจอครับ");
+                return;
+            }
+
+            const dateVal = document.getElementById('dateInput').value;
+            const [yyyy, mm, dd] = dateVal.split('-');
+            const formattedDate = `${dd}/${mm}/${yyyy}`;
+
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+
+            const requestUrl = `${GAS_WEB_APP_URL}?action=book&date=${encodeURIComponent(formattedDate)}&time=${encodeURIComponent(selectedTime)}&name=${encodeURIComponent(userName)}`;
+
+            fetch(requestUrl, { method: 'GET', mode: 'no-cors' })
+            .then(() => {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                alert('✅ ลงทะเบียนสำเร็จ!');
+                if (liff.isInClient()) {
+                    liff.closeWindow();
+                } else {
+                    window.location.reload(); 
+                }
+            })
+            .catch(error => {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+                alert('เกิดข้อผิดพลาดในการเชื่อมต่อเพื่อบันทึกข้อมูล');
+                console.error(error);
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            setupDate();
+            renderTimeSlots();
+            initializeLiff();
+        });
+    </script>
+</body>
+</html>
